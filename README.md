@@ -5,13 +5,32 @@ tokenizer, a precedence-climbing parser with Prolog operator precedences,
 first-order unification with occurs check, and an SLD-resolution engine with
 depth-first search, backtracking, and correct cut semantics — plus a REPL.
 
+Published on mooncakes.io: run it without installing anything:
+
 ```
-$ moon build --target native
-$ ./_build/native/debug/build/cmd/main/main.exe        # interactive REPL
-$ ./_build/native/debug/build/cmd/main/main.exe < examples/family.pl   # batch
+$ echo '?- member(X, [a, b, c]).' | moonx bobzhang/prolog
 ```
 
-(Or `moon run cmd/main`; `preferred_target` is already `"native"`.)
+Or build it yourself (a `moon.work` workspace with two modules):
+
+```
+$ moon build --target native
+$ ./_build/native/debug/build/bobzhang/prolog/prolog.exe            # async REPL (wasm & native)
+$ ./_build/native/debug/build/bobzhang/prolog-repl/cmd/repl/repl.exe  # interactive `;` REPL (native)
+$ ./_build/native/debug/build/bobzhang/prolog/prolog.exe < examples/family.pl
+```
+
+## Workspace layout
+
+* `prolog/` — module `bobzhang/prolog` (published to mooncakes.io):
+  * top-level package: the REPL entry point that `moonx bobzhang/prolog`
+    runs, built on `moonbitlang/async` stdio so it works on wasm and native;
+  * `lib/` package: the pure engine — terms, unification, parser, SLD
+    resolution. No I/O: `write/1` captures into the `Ctx` output buffer and
+    `halt/0` sets a flag. Use it with
+    `import { "bobzhang/prolog/lib" @lib }`.
+* `repl/` — local module `bobzhang/prolog-repl`: the interactive native REPL
+  with `;` prompting (libc `getchar`, so native-only).
 
 ## Language
 

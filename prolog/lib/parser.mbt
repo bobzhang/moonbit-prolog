@@ -8,7 +8,7 @@
 /// Parsing errors are raised as `Failure` and turned into `None` by
 /// `parse_statement`.
 
-enum Token {
+priv enum Token {
   TAtom(String)
   TVar(String)
   TNum(Int)
@@ -55,7 +55,7 @@ fn slice(s : String, start : Int, end : Int) -> String {
 }
 
 /// Trim whitespace, returning a plain String.
-fn trim(s : String) -> String {
+pub fn trim(s : String) -> String {
   let mut start = 0
   while start < s.length() && is_space(code_at(s, start)) {
     start = start + 1
@@ -301,17 +301,17 @@ fn tokenize(src : String) -> Array[Token] raise Failure {
 }
 
 /// A clause: `head :- body.` (body is the flattened goal list; empty for facts).
-struct Clause {
+pub struct Clause {
   head : Term
   body : Array[Term]
 }
 
-enum Statement {
+pub enum Statement {
   StClause(Clause)
   StQuery(Array[Term], Array[(String, Int)])
 }
 
-struct Parser {
+priv struct Parser {
   toks : Array[Token]
   mut pos : Int
   ctx : Ctx
@@ -615,7 +615,7 @@ fn parse_stmt(p : Parser) -> Statement raise Failure {
 
 /// Parse a complete statement (fact, rule or query) from one line of text.
 /// Returns `None` on any syntax error.
-fn parse_statement(ctx : Ctx, text : String) -> Option[Statement] {
+pub fn parse_statement(ctx : Ctx, text : String) -> Option[Statement] {
   try {
     let toks = tokenize(text)
     let p = Parser::{ toks: toks, pos: 0, ctx: ctx, vars: [] }
@@ -623,4 +623,32 @@ fn parse_statement(ctx : Ctx, text : String) -> Option[Statement] {
   } catch {
     _ => None
   }
+}
+
+/// Remove `%` comments (outside of quotes) from a possibly multi-line buffer.
+pub fn strip_comments(s : String) -> String {
+  let mut out = ""
+  let mut in_str = false
+  let mut i = 0
+  while i < s.length() {
+    let c = code_at(s, i)
+    if c == 34 || c == 39 {
+      if i == 0 || code_at(s, i - 1) != 92 {
+        in_str = !in_str
+      }
+      out = out + Int::unsafe_to_char(c).to_string()
+      i = i + 1
+      continue
+    }
+    if c == 37 && !in_str {
+      while i < s.length() && code_at(s, i) != 10 {
+        i = i + 1
+      }
+      continue
+    }
+    out = out + Int::unsafe_to_char(c).to_string()
+    i = i + 1
+    continue
+  }
+  out
 }

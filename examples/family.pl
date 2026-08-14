@@ -1,5 +1,6 @@
 % A small Prolog knowledge base + queries to run through the interpreter:
-%   ./_build/native/debug/build/cmd/main/main.exe < examples/family.pl
+%   moonx bobzhang/prolog < examples/family.pl
+%   ./_build/native/debug/build/bobzhang/prolog/prolog.exe < examples/family.pl
 
 % --- Facts ---------------------------------------------------------------
 parent(john, mary).

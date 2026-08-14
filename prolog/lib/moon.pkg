@@ -1,0 +1,3 @@
+/// The pure Prolog engine: terms, unification, parser, SLD resolution.
+/// No I/O — `write/1` captures into the `Ctx` output buffer and `halt/0`
+/// sets a flag, so hosts stay in full control of the terminal.

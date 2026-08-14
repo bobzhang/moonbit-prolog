@@ -1,6 +1,10 @@
 /// SLD-resolution engine: depth-first search with backtracking, a choice
 /// point stack for exact cut semantics, negation as failure, and builtins.
 ///
+/// The engine is pure: it performs no I/O. `write/1` appends to the `Ctx`
+/// output buffer (see `Ctx::take_output`), and `halt/0` sets a flag and
+/// stops the search. Hosts drive it through `Ctx::submit` / `Ctx::query`.
+///
 /// The solver is CPS-based: `search` explores all solutions of its goal
 /// list and calls `cont` on every success. Backtracking is implicit in the
 /// recursion; substitutions are persistent so no unbinding is needed.
@@ -10,12 +14,84 @@
 /// marker of the invocation whose body it textually belongs to, which
 /// prunes exactly the choice points created since that invocation began.
 
-struct Ctx {
+/// Interpreter state. Create with `Ctx::new()`.
+pub struct Ctx {
   clauses : Array[Clause]
   choice_stack : Array[Array[Bool]]
   mut next_var : Int
   stop : Array[Bool]
-  interactive : Bool
+  mut output : String
+  mut halting : Bool
+}
+
+/// Result of submitting one statement to `Ctx::submit`.
+pub enum Submit {
+  /// The text could not be parsed.
+  SyntaxError
+  /// A fact or rule was asserted.
+  Fact
+  /// `halt.` was submitted.
+  Halt
+  /// A query ran: number of solutions found and whether the solution
+  /// callback asked to stop early.
+  Query(Int, Bool)
+}
+
+pub fn Ctx::new() -> Ctx {
+  let ctx = Ctx::{ clauses: [], choice_stack: [], next_var: 0, stop: [false], output: "", halting: false }
+  seed(ctx)
+  ctx
+}
+
+/// Take and clear the text captured by `write/1`, `writeln/1` and `nl/0`.
+pub fn Ctx::take_output(self : Ctx) -> String {
+  let o = self.output
+  self.output = ""
+  o
+}
+
+/// Parse and run one statement.
+///
+/// `on_solution` is called for every answer found, with the substitution;
+/// return `true` to keep searching, `false` to stop (e.g. an interactive
+/// `;` prompt answered with anything but `;`).
+pub fn Ctx::submit(self : Ctx, text : String, on_solution : (Array[Option[Term]], Array[(String, Int)]) -> Bool) -> Submit {
+  match parse_statement(self, text) {
+    None => SyntaxError
+    Some(StClause(c)) => {
+      match c.head {
+        Atom("halt") => {
+          self.halting = true
+          Halt
+        }
+        _ => {
+          self.clauses.push(c)
+          Fact
+        }
+      }
+    }
+    Some(StQuery(goals, vars)) => {
+      let (n, stopped) = self.query(goals, vars, on_solution)
+      Query(n, stopped)
+    }
+  }
+}
+
+/// Run a query, returning `(solutions_found, stopped_early)`.
+pub fn Ctx::query(self : Ctx, goals : Array[Term], vars : Array[(String, Int)], on_solution : (Array[Option[Term]], Array[(String, Int)]) -> Bool) -> (Int, Bool) {
+  self.stop[0] = false
+  while self.choice_stack.length() > 0 {
+    ignore(self.choice_stack.pop())
+  }
+  let cnt = [0]
+  let cont = fn(s : Array[Option[Term]]) -> Unit {
+    cnt[0] = cnt[0] + 1
+    if !on_solution(s, vars) {
+      self.stop[0] = true
+    }
+  }
+  search(self, goals, 0, [], -1, goals.length(), -1, cont)
+  (cnt[0], self.stop[0])
 }
 
 fn fresh_var(ctx : Ctx) -> Int {
@@ -27,7 +103,7 @@ fn fresh_var(ctx : Ctx) -> Int {
 /// Renames variables of a clause to fresh ids before each use, mapping each
 /// distinct variable (by its global id) to exactly one fresh id so that
 /// variable identity within the clause is preserved.
-struct Renamer {
+priv struct Renamer {
   ctx : Ctx
   table : Array[Int]
 }
@@ -153,8 +229,8 @@ fn search(ctx : Ctx, goals : Array[Term], idx : Int, subst : Array[Option[Term]]
     Atom("true") => search(ctx, goals, idx + 1, subst, marker, bdy, outer, cont)
     Atom("fail") => ()
     Atom("halt") => {
-      flush()
-      exit_proc(0)
+      ctx.halting = true
+      ctx.stop[0] = true
     }
     Atom(a) => call_user(ctx, a, [], goals, idx, subst, marker, bdy, outer, cont)
     Compound(f, args) => handle_compound(ctx, f, args, goals, idx, subst, marker, bdy, outer, cont)
@@ -265,18 +341,18 @@ fn handle_compound(ctx : Ctx, f : String, args : Array[Term], goals : Array[Term
     return
   }
   if f == "write" && args.length() == 1 {
-    print_s(write_term(subst, args[0]))
+    ctx.output = ctx.output + write_term(subst, args[0])
     cont_search(ctx, goals, idx, subst, marker, bdy, outer, cont)
     return
   }
   if f == "writeln" && args.length() == 1 {
-    print_s(write_term(subst, args[0]))
-    print_s("\n")
+    ctx.output = ctx.output + write_term(subst, args[0])
+    ctx.output = ctx.output + "\n"
     cont_search(ctx, goals, idx, subst, marker, bdy, outer, cont)
     return
   }
   if f == "nl" && args.length() == 0 {
-    print_s("\n")
+    ctx.output = ctx.output + "\n"
     cont_search(ctx, goals, idx, subst, marker, bdy, outer, cont)
     return
   }
@@ -430,46 +506,6 @@ fn call_user(ctx : Ctx, f : String, args : Array[Term], goals : Array[Term], idx
     }
   }
   ignore(ctx.choice_stack.pop())
-}
-
-/// Run a query, printing solutions. Interactively (stdin is a TTY) the
-/// user is asked for `;` to search for the next solution; in batch mode
-/// (piped input) all solutions are printed.
-fn run_query(ctx : Ctx, goals : Array[Term], vars : Array[(String, Int)]) -> Unit {
-  ctx.stop[0] = false
-  while ctx.choice_stack.length() > 0 {
-    ignore(ctx.choice_stack.pop())
-  }
-  let cnt = [0]
-  let cont = fn(s : Array[Option[Term]]) -> Unit {
-    cnt[0] = cnt[0] + 1
-    // Start every solution on a fresh line (the REPL prompt has no
-    // trailing newline).
-    print_s("\n")
-    if vars.length() == 0 {
-      println("true.")
-      ctx.stop[0] = true
-      return
-    }
-    for pair in vars {
-      let (name, id) = pair
-      println("\{name} = \{pretty(s, Var(id))}")
-    }
-    if ctx.interactive {
-      print_s(" ;")
-      flush()
-      let ans = read_line()
-      match ans {
-        None => ctx.stop[0] = true
-        Some(a) => if trim(a) != ";" { ctx.stop[0] = true }
-      }
-    }
-  }
-  search(ctx, goals, 0, [], -1, goals.length(), -1, cont)
-  if cnt[0] == 0 || !(ctx.stop[0]) {
-    print_s("\n")
-    println("false.")
-  }
 }
 
 /// Seed a few classic library predicates, parsed like any user input.

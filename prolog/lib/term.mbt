@@ -3,7 +3,7 @@
 /// Variables are represented by unique integer ids (assigned by the parser
 /// and by clause renaming). Atoms, integers and strings are atomic
 /// constants; `Compound(f, args)` is a structure with functor `f`.
-enum Term {
+pub(all) enum Term {
   Var(Int)
   Atom(String)
   Num(Int)
@@ -16,7 +16,7 @@ enum Term {
 /// Substitutions are persistent: `bind` returns a modified copy.
 
 /// Follow the binding chain of `t` and return its head.
-fn deref(subst : Array[Option[Term]], t : Term) -> Term {
+pub fn deref(subst : Array[Option[Term]], t : Term) -> Term {
   match t {
     Var(v) => {
       if v < subst.length() {
@@ -71,7 +71,7 @@ fn bind(subst : Array[Option[Term]], v : Int, t : Term) -> Option[Array[Option[T
 
 /// First-order unification with occurs check.
 /// Returns the extended substitution, or `None` on failure.
-fn unify(a : Term, b : Term, subst : Array[Option[Term]]) -> Option[Array[Option[Term]]] {
+pub fn unify(a : Term, b : Term, subst : Array[Option[Term]]) -> Option[Array[Option[Term]]] {
   let a2 = deref(subst, a)
   let b2 = deref(subst, b)
   match (a2, b2) {
@@ -106,7 +106,7 @@ fn unify_args(a1 : Array[Term], a2 : Array[Term], subst : Array[Option[Term]], i
 /// Structural equality for `==/2`: variables compare positionally
 /// (an unbound variable equals any other unbound variable), so this is
 /// variant equality rather than ISO identity comparison.
-fn term_equal(subst : Array[Option[Term]], a : Term, b : Term) -> Bool {
+pub fn term_equal(subst : Array[Option[Term]], a : Term, b : Term) -> Bool {
   let a2 = deref(subst, a)
   let b2 = deref(subst, b)
   match (a2, b2) {
@@ -133,7 +133,7 @@ fn args_equal(subst : Array[Option[Term]], a1 : Array[Term], a2 : Array[Term], i
 
 /// Evaluate an arithmetic expression to an integer (for `is/2`, `=:=/2`,
 /// comparisons, `between/3`).
-fn eval(subst : Array[Option[Term]], t : Term) -> Option[Int] {
+pub fn eval(subst : Array[Option[Term]], t : Term) -> Option[Int] {
   match deref(subst, t) {
     Num(n) => Some(n)
     Compound(f, args) => {
@@ -170,7 +170,7 @@ fn eval(subst : Array[Option[Term]], t : Term) -> Option[Int] {
 }
 
 /// Evaluate two arithmetic expressions together (for comparisons).
-fn eval2(subst : Array[Option[Term]], a : Term, b : Term) -> Option[(Int, Int)] {
+pub fn eval2(subst : Array[Option[Term]], a : Term, b : Term) -> Option[(Int, Int)] {
   match (eval(subst, a), eval(subst, b)) {
     (Some(x), Some(y)) => Some((x, y))
     _ => None
@@ -178,12 +178,12 @@ fn eval2(subst : Array[Option[Term]], a : Term, b : Term) -> Option[(Int, Int)] 
 }
 
 /// Pretty-print a term for answers (`writeq` style: strings quoted).
-fn pretty(subst : Array[Option[Term]], t : Term) -> String {
+pub fn pretty(subst : Array[Option[Term]], t : Term) -> String {
   pretty_q(subst, t, true)
 }
 
 /// Print a term for `write/1` (strings unquoted).
-fn write_term(subst : Array[Option[Term]], t : Term) -> String {
+pub fn write_term(subst : Array[Option[Term]], t : Term) -> String {
   pretty_q(subst, t, false)
 }
 

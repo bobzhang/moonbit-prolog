@@ -1,0 +1,9 @@
+/// Top-level package: the REPL entry point that `moonx bobzhang/prolog`
+/// runs. The reusable engine lives in the `lib` package.
+import {
+  "bobzhang/prolog/lib" @lib,
+  "moonbitlang/async",
+  "moonbitlang/async/stdio",
+}
+
+pkgtype(kind: "executable")
