@@ -32,6 +32,36 @@ $ ./_build/native/debug/build/bobzhang/prolog/prolog.exe < examples/family.pl
 * `repl/` — local module `bobzhang/prolog-repl`: the interactive native REPL
   with `;` prompting (libc `getchar`, so native-only).
 
+## Using the library
+
+```
+moon add bobzhang/prolog
+```
+
+```moonbit
+// cmd/main/moon.pkg
+import { "bobzhang/prolog/lib" @lib }
+
+// cmd/main/main.mbt
+fn main {
+  let ctx = @lib.Ctx::new()
+  let on_solution = fn(_s : Array[Option[@lib.Term]], qvars : Array[(String, Int)]) -> Bool {
+    for pair in qvars {
+      let (name, id) = pair
+      println("\{name} = \{@lib.pretty(_s, @lib.Var(id))}")
+    }
+    true
+  }
+  match ctx.submit("?- member(X, [a, b, c]).", on_solution) {
+    @lib.Query(n, _) => println("solutions: \{n}")
+    _ => ()
+  }
+}
+```
+
+The engine is pure: `Ctx::submit` parses and runs a statement, `write/1`
+captures into `Ctx::take_output`, and `halt/0` just sets a flag.
+
 ## Language
 
 ```prolog
@@ -65,10 +95,13 @@ clauses — feel free to redefine them.
 
 ## REPL
 
-* `prolog> ` prompt; statements accumulate until a line ends with `.`.
-* In a terminal, after each answer you are asked for `;` (next solution) —
-  any other input stops. Piped input prints all solutions automatically.
-* `halt.` exits.
+* The `moonx` REPL (wasm/native) prints every solution — ideal for scripts.
+  Statements accumulate until a line ends with `.`, and `halt.` exits.
+* The native `repl` module adds a `prolog> ` prompt and interactive `;`
+  continuation on a TTY.
+
+Note: version 0.1.0 predates the runnable entry point; use 0.1.1+ for
+`moonx bobzhang/prolog`.
 
 ```
 prolog> sibling(X, Y) :- parent(P, X), parent(P, Y), X \= Y.
@@ -111,5 +144,5 @@ false.
 ## Running the examples
 
 ```bash
-./_build/native/debug/build/cmd/main/main.exe < examples/family.pl
+moonx bobzhang/prolog < examples/family.pl
 ```
