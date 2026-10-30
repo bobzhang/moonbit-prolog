@@ -7,6 +7,7 @@
 ///
 /// This package is the one `moonx bobzhang/prolog` executes.
 
+///|
 /// Flush the text captured by `write/1` & friends to stdout.
 fn flush_output(ctx : @lib.Ctx) -> Unit {
   let out = ctx.take_output()
@@ -19,13 +20,14 @@ fn flush_output(ctx : @lib.Ctx) -> Unit {
     let mut text = ""
     let mut i = 0
     while i < n {
-      text = text + Int::unsafe_to_char(out[i].to_int()).to_string()
+      text = text + Int32::unsafe_to_char(out[i].to_int()).to_string()
       i = i + 1
     }
     println(text)
   }
 }
 
+///|
 async fn main {
   let ctx = @lib.Ctx::new()
   let mut buf = ""
@@ -44,7 +46,10 @@ async fn main {
       continue
     }
     if t[t.length() - 1].to_int() == 46 {
-      let on_solution = fn(_s : Array[Option[@lib.Term]], qvars : Array[(String, Int)]) -> Bool {
+      let on_solution = fn(
+        _s : Array[@lib.Term?],
+        qvars : Array[(String, Int32)],
+      ) -> Bool {
         flush_output(ctx)
         println("")
         if qvars.length() == 0 {
@@ -63,7 +68,11 @@ async fn main {
         Fact => ()
         Halt => return
         SyntaxError => println("Syntax error")
-        Query(_, stopped) => if !stopped { println(""); println("false.") }
+        Query(_, stopped) =>
+          if !stopped {
+            println("")
+            println("false.")
+          }
       }
       buf = ""
     }

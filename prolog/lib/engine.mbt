@@ -14,16 +14,18 @@
 /// marker of the invocation whose body it textually belongs to, which
 /// prunes exactly the choice points created since that invocation began.
 
+///|
 /// Interpreter state. Create with `Ctx::new()`.
 pub struct Ctx {
   clauses : Array[Clause]
   choice_stack : Array[Array[Bool]]
-  mut next_var : Int
+  mut next_var : Int32
   stop : Array[Bool]
   mut output : String
   mut halting : Bool
 }
 
+///|
 /// Result of submitting one statement to `Ctx::submit`.
 pub enum Submit {
   /// The text could not be parsed.
@@ -34,15 +36,24 @@ pub enum Submit {
   Halt
   /// A query ran: number of solutions found and whether the solution
   /// callback asked to stop early.
-  Query(Int, Bool)
+  Query(Int32, Bool)
 }
 
+///|
 pub fn Ctx::new() -> Ctx {
-  let ctx = Ctx::{ clauses: [], choice_stack: [], next_var: 0, stop: [false], output: "", halting: false }
+  let ctx = Ctx::{
+    clauses: [],
+    choice_stack: [],
+    next_var: 0,
+    stop: [false],
+    output: "",
+    halting: false,
+  }
   seed(ctx)
   ctx
 }
 
+///|
 /// Take and clear the text captured by `write/1`, `writeln/1` and `nl/0`.
 pub fn Ctx::take_output(self : Ctx) -> String {
   let o = self.output
@@ -50,15 +61,20 @@ pub fn Ctx::take_output(self : Ctx) -> String {
   o
 }
 
+///|
 /// Parse and run one statement.
 ///
 /// `on_solution` is called for every answer found, with the substitution;
 /// return `true` to keep searching, `false` to stop (e.g. an interactive
 /// `;` prompt answered with anything but `;`).
-pub fn Ctx::submit(self : Ctx, text : String, on_solution : (Array[Option[Term]], Array[(String, Int)]) -> Bool) -> Submit {
+pub fn Ctx::submit(
+  self : Ctx,
+  text : String,
+  on_solution : (Array[Term?], Array[(String, Int32)]) -> Bool,
+) -> Submit {
   match parse_statement(self, text) {
     None => SyntaxError
-    Some(StClause(c)) => {
+    Some(StClause(c)) =>
       match c.head {
         Atom("halt") => {
           self.halting = true
@@ -69,7 +85,6 @@ pub fn Ctx::submit(self : Ctx, text : String, on_solution : (Array[Option[Term]]
           Fact
         }
       }
-    }
     Some(StQuery(goals, vars)) => {
       let (n, stopped) = self.query(goals, vars, on_solution)
       Query(n, stopped)
@@ -77,14 +92,20 @@ pub fn Ctx::submit(self : Ctx, text : String, on_solution : (Array[Option[Term]]
   }
 }
 
+///|
 /// Run a query, returning `(solutions_found, stopped_early)`.
-pub fn Ctx::query(self : Ctx, goals : Array[Term], vars : Array[(String, Int)], on_solution : (Array[Option[Term]], Array[(String, Int)]) -> Bool) -> (Int, Bool) {
+pub fn Ctx::query(
+  self : Ctx,
+  goals : Array[Term],
+  vars : Array[(String, Int32)],
+  on_solution : (Array[Term?], Array[(String, Int32)]) -> Bool,
+) -> (Int32, Bool) {
   self.stop[0] = false
   while self.choice_stack.length() > 0 {
     ignore(self.choice_stack.pop())
   }
   let cnt = [0]
-  let cont = fn(s : Array[Option[Term]]) -> Unit {
+  let cont = fn(s : Array[Term?]) -> Unit {
     cnt[0] = cnt[0] + 1
     if !on_solution(s, vars) {
       self.stop[0] = true
@@ -94,32 +115,36 @@ pub fn Ctx::query(self : Ctx, goals : Array[Term], vars : Array[(String, Int)], 
   (cnt[0], self.stop[0])
 }
 
-fn fresh_var(ctx : Ctx) -> Int {
+///|
+fn fresh_var(ctx : Ctx) -> Int32 {
   let v = ctx.next_var
   ctx.next_var = v + 1
   v
 }
 
+///|
 /// Renames variables of a clause to fresh ids before each use, mapping each
 /// distinct variable (by its global id) to exactly one fresh id so that
 /// variable identity within the clause is preserved.
 priv struct Renamer {
   ctx : Ctx
-  table : Array[Int]
+  table : Array[Int32]
 }
 
+///|
 fn rename_clause(ctx : Ctx, c : Clause) -> Clause {
-  let r = Renamer::{ ctx: ctx, table: [] }
+  let r = Renamer::{ ctx, table: [], }
   let body : Array[Term] = []
   for g in c.body {
     body.push(rename_term(r, g))
   }
-  Clause::{ head: rename_term(r, c.head), body: body }
+  Clause::{ head: rename_term(r, c.head), body, }
 }
 
+///|
 fn rename_term(r : Renamer, t : Term) -> Term {
   match t {
-    Var(v) => {
+    Var(v) =>
       if v < r.table.length() && r.table[v] >= 0 {
         Var(r.table[v])
       } else {
@@ -130,7 +155,6 @@ fn rename_term(r : Renamer, t : Term) -> Term {
         r.table[v] = nv
         Var(nv)
       }
-    }
     Compound(f, args) => {
       let ns : Array[Term] = []
       for a in args {
@@ -142,8 +166,9 @@ fn rename_term(r : Renamer, t : Term) -> Term {
   }
 }
 
+///|
 /// Set every cut flag from the top of the choice stack down through `marker`.
-fn cut_through(ctx : Ctx, marker : Int) -> Unit {
+fn cut_through(ctx : Ctx, marker : Int32) -> Unit {
   let mut i = ctx.choice_stack.length() - 1
   while i >= marker && i >= 0 {
     ctx.choice_stack[i][0] = true
@@ -151,9 +176,10 @@ fn cut_through(ctx : Ctx, marker : Int) -> Unit {
   }
 }
 
+///|
 /// Deep-copy a dereferenced term, giving unbound variables fresh ids
 /// (used by `findall/3` so each collected answer is independent).
-fn copy_term(ctx : Ctx, subst : Array[Option[Term]], t : Term) -> Term {
+fn copy_term(ctx : Ctx, subst : Array[Term?], t : Term) -> Term {
   match deref(subst, t) {
     Var(_) => Var(fresh_var(ctx))
     Atom(a) => Atom(a)
@@ -169,6 +195,7 @@ fn copy_term(ctx : Ctx, subst : Array[Option[Term]], t : Term) -> Term {
   }
 }
 
+///|
 /// Build a list term from a solution collection (order preserved).
 fn build_list(items : Array[Term]) -> Term {
   let mut result = Atom("[]")
@@ -181,7 +208,8 @@ fn build_list(items : Array[Term]) -> Term {
   result
 }
 
-fn rest_of(goals : Array[Term], idx : Int) -> Array[Term] {
+///|
+fn rest_of(goals : Array[Term], idx : Int32) -> Array[Term] {
   let ns : Array[Term] = []
   let mut i = idx
   while i < goals.length() {
@@ -191,6 +219,7 @@ fn rest_of(goals : Array[Term], idx : Int) -> Array[Term] {
   ns
 }
 
+///|
 fn prep1(g : Term, rest : Array[Term]) -> Array[Term] {
   let ns : Array[Term] = []
   ns.push(g)
@@ -200,6 +229,7 @@ fn prep1(g : Term, rest : Array[Term]) -> Array[Term] {
   ns
 }
 
+///|
 fn prep2(a : Term, b : Term, rest : Array[Term]) -> Array[Term] {
   let ns : Array[Term] = []
   ns.push(a)
@@ -210,14 +240,34 @@ fn prep2(a : Term, b : Term, rest : Array[Term]) -> Array[Term] {
   ns
 }
 
-fn cont_search(ctx : Ctx, goals : Array[Term], idx : Int, subst : Array[Option[Term]], marker : Int, bdy : Int, outer : Int, cont : (Array[Option[Term]]) -> Unit) -> Unit {
+///|
+fn cont_search(
+  ctx : Ctx,
+  goals : Array[Term],
+  idx : Int32,
+  subst : Array[Term?],
+  marker : Int32,
+  bdy : Int32,
+  outer : Int32,
+  cont : (Array[Term?]) -> Unit,
+) -> Unit {
   search(ctx, goals, idx + 1, subst, marker, bdy, outer, cont)
 }
 
+///|
 /// The main loop. `marker` is the cut marker for goals in the "body part"
 /// (positions < bdy) of the current list; `outer` is the marker for the
 /// "rest part" (positions >= bdy), which belongs to the caller.
-fn search(ctx : Ctx, goals : Array[Term], idx : Int, subst : Array[Option[Term]], marker : Int, bdy : Int, outer : Int, cont : (Array[Option[Term]]) -> Unit) -> Unit {
+fn search(
+  ctx : Ctx,
+  goals : Array[Term],
+  idx : Int32,
+  subst : Array[Term?],
+  marker : Int32,
+  bdy : Int32,
+  outer : Int32,
+  cont : (Array[Term?]) -> Unit,
+) -> Unit {
   if ctx.stop[0] {
     return
   }
@@ -232,25 +282,66 @@ fn search(ctx : Ctx, goals : Array[Term], idx : Int, subst : Array[Option[Term]]
       ctx.halting = true
       ctx.stop[0] = true
     }
-    Atom(a) => call_user(ctx, a, [], goals, idx, subst, marker, bdy, outer, cont)
-    Compound(f, args) => handle_compound(ctx, f, args, goals, idx, subst, marker, bdy, outer, cont)
+    Atom(a) =>
+      call_user(ctx, a, [], goals, idx, subst, marker, bdy, outer, cont)
+    Compound(f, args) =>
+      handle_compound(ctx, f, args, goals, idx, subst, marker, bdy, outer, cont)
     _ => ()
   }
 }
 
-fn handle_compound(ctx : Ctx, f : String, args : Array[Term], goals : Array[Term], idx : Int, subst : Array[Option[Term]], marker : Int, bdy : Int, outer : Int, cont : (Array[Option[Term]]) -> Unit) -> Unit {
+///|
+fn handle_compound(
+  ctx : Ctx,
+  f : String,
+  args : Array[Term],
+  goals : Array[Term],
+  idx : Int32,
+  subst : Array[Term?],
+  marker : Int32,
+  bdy : Int32,
+  outer : Int32,
+  cont : (Array[Term?]) -> Unit,
+) -> Unit {
   if f == "," && args.length() == 2 {
     let nbdy = if idx < bdy { bdy - idx + 2 } else { 0 }
-    search(ctx, prep2(args[0], args[1], rest_of(goals, idx + 1)), 0, subst, marker, nbdy, outer, cont)
+    search(
+      ctx,
+      prep2(args[0], args[1], rest_of(goals, idx + 1)),
+      0,
+      subst,
+      marker,
+      nbdy,
+      outer,
+      cont,
+    )
     return
   }
   if f == ";" && args.length() == 2 {
     let nbdy = if idx < bdy { bdy - idx + 1 } else { 0 }
     let fcell = [false]
     ctx.choice_stack.push(fcell)
-    search(ctx, prep1(args[0], rest_of(goals, idx + 1)), 0, subst, marker, nbdy, outer, cont)
-    if !(ctx.stop[0]) && !(fcell[0]) {
-      search(ctx, prep1(args[1], rest_of(goals, idx + 1)), 0, subst, marker, nbdy, outer, cont)
+    search(
+      ctx,
+      prep1(args[0], rest_of(goals, idx + 1)),
+      0,
+      subst,
+      marker,
+      nbdy,
+      outer,
+      cont,
+    )
+    if !ctx.stop[0] && !fcell[0] {
+      search(
+        ctx,
+        prep1(args[1], rest_of(goals, idx + 1)),
+        0,
+        subst,
+        marker,
+        nbdy,
+        outer,
+        cont,
+      )
     }
     ignore(ctx.choice_stack.pop())
     return
@@ -267,7 +358,7 @@ fn handle_compound(ctx : Ctx, f : String, args : Array[Term], goals : Array[Term
   if f == "\\+" && args.length() == 1 {
     let om = if idx < bdy { marker } else { outer }
     let cnt = [0]
-    let inner = fn(_s : Array[Option[Term]]) -> Unit { cnt[0] = cnt[0] + 1 }
+    let inner = fn(_s : Array[Term?]) -> Unit { cnt[0] = cnt[0] + 1 }
     search(ctx, [args[0]], 0, subst, om, 1, om, inner)
     if cnt[0] == 0 {
       cont_search(ctx, goals, idx, subst, marker, bdy, outer, cont)
@@ -276,7 +367,16 @@ fn handle_compound(ctx : Ctx, f : String, args : Array[Term], goals : Array[Term
   }
   if f == "call" && args.length() == 1 {
     let nbdy = if idx < bdy { bdy - idx + 1 } else { 0 }
-    search(ctx, prep1(args[0], rest_of(goals, idx + 1)), 0, subst, marker, nbdy, outer, cont)
+    search(
+      ctx,
+      prep1(args[0], rest_of(goals, idx + 1)),
+      0,
+      subst,
+      marker,
+      nbdy,
+      outer,
+      cont,
+    )
     return
   }
   if f == "=" && args.length() == 2 {
@@ -299,24 +399,31 @@ fn handle_compound(ctx : Ctx, f : String, args : Array[Term], goals : Array[Term
     return
   }
   if f == "\\==" && args.length() == 2 {
-    if !(term_equal(subst, args[0], args[1])) {
+    if !term_equal(subst, args[0], args[1]) {
       cont_search(ctx, goals, idx, subst, marker, bdy, outer, cont)
     }
     return
   }
   if f == "is" && args.length() == 2 {
     match eval(subst, args[1]) {
-      Some(n) => {
+      Some(n) =>
         match unify(args[0], Num(n), subst) {
           Some(s) => cont_search(ctx, goals, idx, s, marker, bdy, outer, cont)
           None => ()
         }
-      }
       None => ()
     }
     return
   }
-  if (f == "=:=" || f == "=\\=" || f == "<" || f == ">" || f == "=<" || f == ">=") && args.length() == 2 {
+  if (
+      f == "=:=" ||
+      f == "=\\=" ||
+      f == "<" ||
+      f == ">" ||
+      f == "=<" ||
+      f == ">="
+    ) &&
+    args.length() == 2 {
     match eval2(subst, args[0], args[1]) {
       Some((x, y)) => {
         let ok = if f == "=:=" {
@@ -395,7 +502,8 @@ fn handle_compound(ctx : Ctx, f : String, args : Array[Term], goals : Array[Term
   }
   if f == "compound" && args.length() == 1 {
     match deref(subst, args[0]) {
-      Compound(_, _) => cont_search(ctx, goals, idx, subst, marker, bdy, outer, cont)
+      Compound(_, _) =>
+        cont_search(ctx, goals, idx, subst, marker, bdy, outer, cont)
       _ => ()
     }
     return
@@ -427,7 +535,7 @@ fn handle_compound(ctx : Ctx, f : String, args : Array[Term], goals : Array[Term
     let fcell = [false]
     ctx.choice_stack.push(fcell)
     cont_search(ctx, goals, idx, subst, marker, bdy, outer, cont)
-    if !(ctx.stop[0]) && !(fcell[0]) {
+    if !ctx.stop[0] && !fcell[0] {
       search(ctx, goals, idx, subst, marker, bdy, outer, cont)
     }
     ignore(ctx.choice_stack.pop())
@@ -436,7 +544,7 @@ fn handle_compound(ctx : Ctx, f : String, args : Array[Term], goals : Array[Term
   if f == "findall" && args.length() == 3 {
     let acc : Array[Term] = []
     let om = if idx < bdy { marker } else { outer }
-    let inner = fn(s : Array[Option[Term]]) -> Unit {
+    let inner = fn(s : Array[Term?]) -> Unit {
       acc.push(copy_term(ctx, s, args[0]))
     }
     search(ctx, [args[1]], 0, subst, om, 1, om, inner)
@@ -458,22 +566,29 @@ fn handle_compound(ctx : Ctx, f : String, args : Array[Term], goals : Array[Term
   call_user(ctx, f, args, goals, idx, subst, marker, bdy, outer, cont)
 }
 
+///|
 /// Resolve a call to a user-defined predicate (arity 0 calls arrive here
 /// from `search` with `args = []`).
-fn call_user(ctx : Ctx, f : String, args : Array[Term], goals : Array[Term], idx : Int, subst : Array[Option[Term]], marker : Int, bdy : Int, outer : Int, cont : (Array[Option[Term]]) -> Unit) -> Unit {
+fn call_user(
+  ctx : Ctx,
+  f : String,
+  args : Array[Term],
+  goals : Array[Term],
+  idx : Int32,
+  subst : Array[Term?],
+  marker : Int32,
+  bdy : Int32,
+  outer : Int32,
+  cont : (Array[Term?]) -> Unit,
+) -> Unit {
   let candidates : Array[Clause] = []
   for c in ctx.clauses {
     match c.head {
-      Compound(hf, hargs) => {
+      Compound(hf, hargs) =>
         if hf == f && hargs.length() == args.length() {
           candidates.push(c)
         }
-      }
-      Atom(ha) => {
-        if ha == f && args.length() == 0 {
-          candidates.push(c)
-        }
-      }
+      Atom(ha) => if ha == f && args.length() == 0 { candidates.push(c) }
       _ => ()
     }
   }
@@ -508,16 +623,13 @@ fn call_user(ctx : Ctx, f : String, args : Array[Term], goals : Array[Term], idx
   ignore(ctx.choice_stack.pop())
 }
 
+///|
 /// Seed a few classic library predicates, parsed like any user input.
 /// (`length/2` is a builtin so it works in both directions.)
 fn seed(ctx : Ctx) -> Unit {
   let lib = [
-    "member(X, [X|_]).",
-    "member(X, [_|T]) :- member(X, T).",
-    "append([], L, L).",
-    "append([H|T], L, [H|R]) :- append(T, L, R).",
-    "reverse([], []).",
-    "reverse([H|T], R) :- reverse(T, RT), append(RT, [H], R).",
+    "member(X, [X|_]).", "member(X, [_|T]) :- member(X, T).", "append([], L, L).",
+    "append([H|T], L, [H|R]) :- append(T, L, R).", "reverse([], []).", "reverse([H|T], R) :- reverse(T, RT), append(RT, [H], R).",
   ]
   for s in lib {
     match parse_statement(ctx, s) {
@@ -527,8 +639,9 @@ fn seed(ctx : Ctx) -> Unit {
   }
 }
 
+///|
 /// Build the list term [_G, _G, ..., _G] with `n` fresh variables.
-fn var_list(ctx : Ctx, n : Int) -> Term {
+fn var_list(ctx : Ctx, n : Int32) -> Term {
   let mut t = Atom("[]")
   let mut i = 0
   while i < n {
@@ -538,19 +651,29 @@ fn var_list(ctx : Ctx, n : Int) -> Term {
   t
 }
 
+///|
 /// `length/2` builtin: works with the list, the length, or both given
 /// (with both unbound it generates 0, 1, 2, ... like real Prolog).
-fn length_builtin(ctx : Ctx, args : Array[Term], goals : Array[Term], idx : Int, subst : Array[Option[Term]], marker : Int, bdy : Int, outer : Int, cont : (Array[Option[Term]]) -> Unit) -> Unit {
+fn length_builtin(
+  ctx : Ctx,
+  args : Array[Term],
+  goals : Array[Term],
+  idx : Int32,
+  subst : Array[Term?],
+  marker : Int32,
+  bdy : Int32,
+  outer : Int32,
+  cont : (Array[Term?]) -> Unit,
+) -> Unit {
   let a = deref(subst, args[0])
   let b = deref(subst, args[1])
   match (a, b) {
-    (Atom("[]"), _) => {
+    (Atom("[]"), _) =>
       match unify(args[1], Num(0), subst) {
         Some(s) => cont_search(ctx, goals, idx, s, marker, bdy, outer, cont)
         None => ()
       }
-    }
-    (Compound(".", cons), Num(n)) => {
+    (Compound(".", cons), Num(n)) =>
       // List non-empty and length given: peel one element.
       if n > 0 {
         let ns : Array[Term] = []
@@ -560,7 +683,6 @@ fn length_builtin(ctx : Ctx, args : Array[Term], goals : Array[Term], idx : Int,
         }
         search(ctx, ns, 0, subst, marker, bdy, outer, cont)
       }
-    }
     (Compound(".", cons), Var(_)) => {
       // Count up: length(T, M), N is M + 1. Terminates (the list is finite).
       let mv = fresh_var(ctx)
@@ -572,7 +694,7 @@ fn length_builtin(ctx : Ctx, args : Array[Term], goals : Array[Term], idx : Int,
       }
       search(ctx, ns, 0, subst, marker, bdy, outer, cont)
     }
-    (Var(_), Num(n)) => {
+    (Var(_), Num(n)) =>
       // List unbound, length given: build a list of n fresh variables.
       if n >= 0 {
         match unify(args[0], var_list(ctx, n), subst) {
@@ -580,7 +702,6 @@ fn length_builtin(ctx : Ctx, args : Array[Term], goals : Array[Term], idx : Int,
           None => ()
         }
       }
-    }
     (Var(_), Var(_)) => {
       // Both unbound: generate [], [_], [_, _], ...
       let fcell = [false]
@@ -591,12 +712,12 @@ fn length_builtin(ctx : Ctx, args : Array[Term], goals : Array[Term], idx : Int,
           break
         }
         match unify(args[0], var_list(ctx, i), subst) {
-          Some(s1) => {
+          Some(s1) =>
             match unify(args[1], Num(i), s1) {
-              Some(s2) => cont_search(ctx, goals, idx, s2, marker, bdy, outer, cont)
+              Some(s2) =>
+                cont_search(ctx, goals, idx, s2, marker, bdy, outer, cont)
               None => ()
             }
-          }
           None => ()
         }
         i = i + 1

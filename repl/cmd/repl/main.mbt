@@ -1,17 +1,21 @@
+///|
 /// Interactive native REPL for `bobzhang/prolog`.
 ///
 /// On a TTY, after each answer you are asked for `;` (next solution) —
 /// any other input stops. Piped input prints all solutions automatically.
 /// Uses libc `getchar`/`putchar` directly, so this module is native-only.
+extern "c" fn getchar() -> Int32 = "getchar"
 
-extern "c" fn getchar() -> Int = "getchar"
+///|
+extern "c" fn putchar(c : Int32) -> Int32 = "putchar"
 
-extern "c" fn putchar(c : Int) -> Int = "putchar"
+///|
+extern "c" fn fflush(stream : Int32) -> Int32 = "fflush"
 
-extern "c" fn fflush(stream : Int) -> Int = "fflush"
+///|
+extern "c" fn isatty(fd : Int32) -> Int32 = "isatty"
 
-extern "c" fn isatty(fd : Int) -> Int = "isatty"
-
+///|
 /// Write a string without a trailing newline.
 fn print_s(s : String) -> Unit {
   let mut i = 0
@@ -21,12 +25,14 @@ fn print_s(s : String) -> Unit {
   }
 }
 
+///|
 fn flush() -> Unit {
   ignore(fflush(0))
 }
 
+///|
 /// Read one line from stdin (byte-wise; `None` at EOF).
-fn read_line() -> Option[String] {
+fn read_line() -> String? {
   let mut buf = ""
   while true {
     let c = getchar()
@@ -40,13 +46,14 @@ fn read_line() -> Option[String] {
       return Some(buf)
     }
     if c != 13 {
-      buf = buf + Int::unsafe_to_char(c).to_string()
+      buf = buf + Int32::unsafe_to_char(c).to_string()
     }
     continue
   }
   None
 }
 
+///|
 /// Flush the text captured by `write/1` & friends to stdout (exact, no
 /// extra newline).
 fn flush_output(ctx : @lib.Ctx) -> Unit {
@@ -56,6 +63,7 @@ fn flush_output(ctx : @lib.Ctx) -> Unit {
   }
 }
 
+///|
 fn main {
   let ctx = @lib.Ctx::new()
   let interactive = isatty(0) != 0
@@ -81,7 +89,10 @@ fn main {
       continue
     }
     if t[t.length() - 1].to_int() == 46 {
-      let on_solution = fn(s : Array[Option[@lib.Term]], qvars : Array[(String, Int)]) -> Bool {
+      let on_solution = fn(
+        s : Array[@lib.Term?],
+        qvars : Array[(String, Int32)],
+      ) -> Bool {
         flush_output(ctx)
         print_s("\n")
         if qvars.length() == 0 {
@@ -110,7 +121,11 @@ fn main {
         Fact => ()
         Halt => return
         SyntaxError => println("Syntax error")
-        Query(_, stopped) => if !stopped { print_s("\n"); println("false.") }
+        Query(_, stopped) =>
+          if !stopped {
+            print_s("\n")
+            println("false.")
+          }
       }
       buf = ""
     }

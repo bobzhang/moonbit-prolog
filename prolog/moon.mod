@@ -8,7 +8,7 @@ repository = "https://github.com/bobzhang/moonbit-prolog"
 
 license = "MIT"
 
-keywords = ["prolog", "interpreter", "logic-programming"]
+keywords = [ "prolog", "interpreter", "logic-programming" ]
 
 preferred_target = "wasm"
 
