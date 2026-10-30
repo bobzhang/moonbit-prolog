@@ -1,3 +1,4 @@
+///|
 /// Tokenizer and parser for a Prolog subset.
 ///
 /// Operator precedences follow Prolog conventions (higher binds looser):
@@ -7,53 +8,61 @@
 ///
 /// Parsing errors are raised as `Failure` and turned into `None` by
 /// `parse_statement`.
-
 priv enum Token {
   TAtom(String)
   TVar(String)
-  TNum(Int)
+  TNum(Int32)
   TStr(String)
   TPunct(String)
 }
 
-fn code_at(s : String, i : Int) -> Int {
+///|
+fn code_at(s : String, i : Int32) -> Int32 {
   s[i].to_int()
 }
 
-fn is_digit(c : Int) -> Bool {
+///|
+fn is_digit(c : Int32) -> Bool {
   c >= 48 && c <= 57
 }
 
-fn is_lower(c : Int) -> Bool {
+///|
+fn is_lower(c : Int32) -> Bool {
   c >= 97 && c <= 122
 }
 
-fn is_upper(c : Int) -> Bool {
+///|
+fn is_upper(c : Int32) -> Bool {
   c >= 65 && c <= 90
 }
 
-fn is_ident_char(c : Int) -> Bool {
+///|
+fn is_ident_char(c : Int32) -> Bool {
   is_digit(c) || is_lower(c) || is_upper(c) || c == 95
 }
 
-fn is_var_start(c : Int) -> Bool {
+///|
+fn is_var_start(c : Int32) -> Bool {
   is_upper(c) || c == 95
 }
 
-fn is_space(c : Int) -> Bool {
+///|
+fn is_space(c : Int32) -> Bool {
   c == 32 || c == 9 || c == 10 || c == 13
 }
 
-fn slice(s : String, start : Int, end : Int) -> String {
+///|
+fn slice(s : String, start : Int32, end : Int32) -> String {
   let mut out = ""
   let mut i = start
   while i < end {
-    out = out + Int::unsafe_to_char(code_at(s, i)).to_string()
+    out = out + Int32::unsafe_to_char(code_at(s, i)).to_string()
     i = i + 1
   }
   out
 }
 
+///|
 /// Trim whitespace, returning a plain String.
 pub fn trim(s : String) -> String {
   let mut start = 0
@@ -67,6 +76,7 @@ pub fn trim(s : String) -> String {
   slice(s, start, end)
 }
 
+///|
 fn tokenize(src : String) -> Array[Token] raise Failure {
   let toks : Array[Token] = []
   let mut i = 0
@@ -122,7 +132,7 @@ fn tokenize(src : String) -> Array[Token] raise Failure {
           } else if e == 92 {
             s = s + "\\"
           } else {
-            s = s + Int::unsafe_to_char(e).to_string()
+            s = s + Int32::unsafe_to_char(e).to_string()
           }
           i = i + 2
           continue
@@ -132,7 +142,7 @@ fn tokenize(src : String) -> Array[Token] raise Failure {
           i = i + 1
           break
         }
-        s = s + Int::unsafe_to_char(d).to_string()
+        s = s + Int32::unsafe_to_char(d).to_string()
         i = i + 1
       }
       if !closed {
@@ -300,25 +310,29 @@ fn tokenize(src : String) -> Array[Token] raise Failure {
   toks
 }
 
+///|
 /// A clause: `head :- body.` (body is the flattened goal list; empty for facts).
 pub struct Clause {
   head : Term
   body : Array[Term]
 }
 
+///|
 pub enum Statement {
   StClause(Clause)
-  StQuery(Array[Term], Array[(String, Int)])
+  StQuery(Array[Term], Array[(String, Int32)])
 }
 
+///|
 priv struct Parser {
   toks : Array[Token]
-  mut pos : Int
+  mut pos : Int32
   ctx : Ctx
-  vars : Array[(String, Int)]
+  vars : Array[(String, Int32)]
 }
 
-fn peek(p : Parser) -> Option[Token] {
+///|
+fn peek(p : Parser) -> Token? {
   if p.pos < p.toks.length() {
     Some(p.toks[p.pos])
   } else {
@@ -326,7 +340,8 @@ fn peek(p : Parser) -> Option[Token] {
   }
 }
 
-fn next(p : Parser) -> Option[Token] {
+///|
+fn next(p : Parser) -> Token? {
   if p.pos < p.toks.length() {
     let t = p.toks[p.pos]
     p.pos = p.pos + 1
@@ -336,28 +351,33 @@ fn next(p : Parser) -> Option[Token] {
   }
 }
 
+///|
 fn expect_punct(p : Parser, s : String) -> Unit raise Failure {
   match next(p) {
-    Some(TPunct(t)) => {
-      if t == s {
-        ()
-      } else {
-        raise Failure("expected \{s}")
-      }
-    }
+    Some(TPunct(t)) => if t == s { () } else { raise Failure("expected \{s}") }
     _ => raise Failure("expected \{s}")
   }
 }
 
-fn op_prec(op : String) -> Int {
+///|
+fn op_prec(op : String) -> Int32 {
   if op == ":-" {
     1200
   } else if op == ";" {
     1100
   } else if op == "," {
     1000
-  } else if op == "=" || op == "\\=" || op == "==" || op == "\\==" || op == "=:=" ||
-    op == "=\\=" || op == "is" || op == "<" || op == ">" || op == "=<" || op == ">=" {
+  } else if op == "=" ||
+    op == "\\=" ||
+    op == "==" ||
+    op == "\\==" ||
+    op == "=:=" ||
+    op == "=\\=" ||
+    op == "is" ||
+    op == "<" ||
+    op == ">" ||
+    op == "=<" ||
+    op == ">=" {
     700
   } else if op == "+" || op == "-" {
     500
@@ -368,27 +388,40 @@ fn op_prec(op : String) -> Int {
   }
 }
 
-fn peek_op_prec(p : Parser) -> Int {
+///|
+fn peek_op_prec(p : Parser) -> Int32 {
   match peek(p) {
     Some(TPunct(op)) => op_prec(op)
-    Some(TAtom(op)) => if op == "is" || op == "mod" || op == "div" { op_prec(op) } else { 0 }
+    Some(TAtom(op)) =>
+      if op == "is" || op == "mod" || op == "div" {
+        op_prec(op)
+      } else {
+        0
+      }
     _ => 0
   }
 }
 
-fn consume_op(p : Parser) -> Option[String] {
+///|
+fn consume_op(p : Parser) -> String? {
   match next(p) {
     Some(TPunct(op)) => Some(op)
-    Some(TAtom(op)) => if op == "is" || op == "mod" || op == "div" { Some(op) } else { None }
+    Some(TAtom(op)) =>
+      if op == "is" || op == "mod" || op == "div" {
+        Some(op)
+      } else {
+        None
+      }
     _ => None
   }
 }
 
+///|
 /// Get the id of variable `name` within this statement (same name = same
 /// variable), allocating a fresh id otherwise. `_` is always anonymous.
 /// Ids come from the global counter in `ctx` so that parser ids, clause
 /// renamings and `findall` copies never collide.
-fn fresh_or_lookup(p : Parser, name : String) -> Int {
+fn fresh_or_lookup(p : Parser, name : String) -> Int32 {
   if name == "_" {
     let v = p.ctx.next_var
     p.ctx.next_var = v + 1
@@ -406,9 +439,10 @@ fn fresh_or_lookup(p : Parser, name : String) -> Int {
   v
 }
 
+///|
 /// Precedence-climbing expression parser: consumes operators whose
 /// precedence is at most `max_prec` (higher precedence = looser binding).
-fn parse_expr(p : Parser, max_prec : Int) -> Term raise Failure {
+fn parse_expr(p : Parser, max_prec : Int32) -> Term raise Failure {
   let tok = match next(p) {
     Some(t) => t
     None => raise Failure("unexpected end of input")
@@ -416,7 +450,7 @@ fn parse_expr(p : Parser, max_prec : Int) -> Term raise Failure {
   let mut lhs = parse_prefix(p, tok)
   // Functor application: an atom followed by '(' is a compound term.
   match lhs {
-    Atom(f) => {
+    Atom(f) =>
       match peek(p) {
         Some(TPunct("(")) => {
           ignore(next(p))
@@ -424,7 +458,6 @@ fn parse_expr(p : Parser, max_prec : Int) -> Term raise Failure {
         }
         _ => ()
       }
-    }
     _ => ()
   }
   while true {
@@ -443,6 +476,7 @@ fn parse_expr(p : Parser, max_prec : Int) -> Term raise Failure {
   lhs
 }
 
+///|
 /// Parse `t1, t2, ... , tn )` (the opening `(` is already consumed).
 fn parse_arg_list(p : Parser) -> Array[Term] raise Failure {
   let args : Array[Term] = []
@@ -464,6 +498,7 @@ fn parse_arg_list(p : Parser) -> Array[Term] raise Failure {
   raise Failure("unreachable")
 }
 
+///|
 fn parse_prefix(p : Parser, tok : Token) -> Term raise Failure {
   match tok {
     TAtom(a) => Atom(a)
@@ -497,6 +532,7 @@ fn parse_prefix(p : Parser, tok : Token) -> Term raise Failure {
   }
 }
 
+///|
 fn parse_list(p : Parser) -> Term raise Failure {
   match peek(p) {
     Some(TPunct("]")) => {
@@ -510,6 +546,7 @@ fn parse_list(p : Parser) -> Term raise Failure {
   }
 }
 
+///|
 fn parse_list_tail(p : Parser, h : Term) -> Term raise Failure {
   match peek(p) {
     Some(TPunct(",")) => {
@@ -532,6 +569,7 @@ fn parse_list_tail(p : Parser, h : Term) -> Term raise Failure {
   }
 }
 
+///|
 /// Flatten a conjunction term `,(a, ,(b, c))` into [a, b, c].
 fn flatten_conj(t : Term) -> Array[Term] {
   match t {
@@ -546,24 +584,28 @@ fn flatten_conj(t : Term) -> Array[Term] {
   }
 }
 
+///|
 /// Convert a parsed term into a clause: `:-(H, B)` is a rule, anything else
 /// is a fact. Also used by `assertz/1`.
 fn term_to_clause(t : Term) -> Clause {
   match t {
-    Compound(":-", args) => Clause::{ head: args[0], body: flatten_conj(args[1]) }
-    _ => Clause::{ head: t, body: [] }
+    Compound(":-", args) =>
+      Clause::{ head: args[0], body: flatten_conj(args[1]), }
+    _ => Clause::{ head: t, body: [], }
   }
 }
 
-fn collect_vars(p : Parser, goals : Array[Term]) -> Array[(String, Int)] {
-  let out : Array[(String, Int)] = []
+///|
+fn collect_vars(p : Parser, goals : Array[Term]) -> Array[(String, Int32)] {
+  let out : Array[(String, Int32)] = []
   for g in goals {
     collect_term(p, g, out)
   }
   out
 }
 
-fn collect_term(p : Parser, t : Term, out : Array[(String, Int)]) -> Unit {
+///|
+fn collect_term(p : Parser, t : Term, out : Array[(String, Int32)]) -> Unit {
   match t {
     Var(id) => {
       let mut found = false
@@ -586,15 +628,15 @@ fn collect_term(p : Parser, t : Term, out : Array[(String, Int)]) -> Unit {
         }
       }
     }
-    Compound(_, args) => {
+    Compound(_, args) =>
       for a in args {
         collect_term(p, a, out)
       }
-    }
     _ => ()
   }
 }
 
+///|
 fn parse_stmt(p : Parser) -> Statement raise Failure {
   match peek(p) {
     Some(TPunct("?-")) => {
@@ -613,18 +655,20 @@ fn parse_stmt(p : Parser) -> Statement raise Failure {
   }
 }
 
+///|
 /// Parse a complete statement (fact, rule or query) from one line of text.
 /// Returns `None` on any syntax error.
-pub fn parse_statement(ctx : Ctx, text : String) -> Option[Statement] {
+pub fn parse_statement(ctx : Ctx, text : String) -> Statement? {
   try {
     let toks = tokenize(text)
-    let p = Parser::{ toks: toks, pos: 0, ctx: ctx, vars: [] }
+    let p = Parser::{ toks, pos: 0, ctx, vars: [], }
     Some(parse_stmt(p))
   } catch {
     _ => None
   }
 }
 
+///|
 /// Remove `%` comments (outside of quotes) from a possibly multi-line buffer.
 pub fn strip_comments(s : String) -> String {
   let mut out = ""
@@ -636,7 +680,7 @@ pub fn strip_comments(s : String) -> String {
       if i == 0 || code_at(s, i - 1) != 92 {
         in_str = !in_str
       }
-      out = out + Int::unsafe_to_char(c).to_string()
+      out = out + Int32::unsafe_to_char(c).to_string()
       i = i + 1
       continue
     }
@@ -646,7 +690,7 @@ pub fn strip_comments(s : String) -> String {
       }
       continue
     }
-    out = out + Int::unsafe_to_char(c).to_string()
+    out = out + Int32::unsafe_to_char(c).to_string()
     i = i + 1
     continue
   }

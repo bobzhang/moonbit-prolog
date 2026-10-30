@@ -1,5 +1,5 @@
 import {
-  "bobzhang/prolog/lib" @lib,
+  "bobzhang/prolog/lib",
 }
 
 supported_targets = "+native"

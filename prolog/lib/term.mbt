@@ -1,12 +1,13 @@
+///|
 /// Prolog terms.
 ///
 /// Variables are represented by unique integer ids (assigned by the parser
 /// and by clause renaming). Atoms, integers and strings are atomic
 /// constants; `Compound(f, args)` is a structure with functor `f`.
 pub(all) enum Term {
-  Var(Int)
+  Var(Int32)
   Atom(String)
-  Num(Int)
+  Num(Int32)
   Str(String)
   Compound(String, Array[Term])
 }
@@ -15,10 +16,11 @@ pub(all) enum Term {
 /// variable `v`; `None` (or an index beyond the array) means unbound.
 /// Substitutions are persistent: `bind` returns a modified copy.
 
+///|
 /// Follow the binding chain of `t` and return its head.
-pub fn deref(subst : Array[Option[Term]], t : Term) -> Term {
+pub fn deref(subst : Array[Term?], t : Term) -> Term {
   match t {
-    Var(v) => {
+    Var(v) =>
       if v < subst.length() {
         match subst[v] {
           Some(b) => deref(subst, b)
@@ -27,13 +29,13 @@ pub fn deref(subst : Array[Option[Term]], t : Term) -> Term {
       } else {
         t
       }
-    }
     _ => t
   }
 }
 
+///|
 /// Occurs check: does variable `v` appear inside `t`?
-fn occurs(subst : Array[Option[Term]], v : Int, t : Term) -> Bool {
+fn occurs(subst : Array[Term?], v : Int32, t : Term) -> Bool {
   match deref(subst, t) {
     Var(w) => w == v
     Compound(_, args) => occurs_args(subst, v, args, 0)
@@ -41,7 +43,13 @@ fn occurs(subst : Array[Option[Term]], v : Int, t : Term) -> Bool {
   }
 }
 
-fn occurs_args(subst : Array[Option[Term]], v : Int, args : Array[Term], i : Int) -> Bool {
+///|
+fn occurs_args(
+  subst : Array[Term?],
+  v : Int32,
+  args : Array[Term],
+  i : Int32,
+) -> Bool {
   if i >= args.length() {
     false
   } else if occurs(subst, v, args[i]) {
@@ -51,13 +59,14 @@ fn occurs_args(subst : Array[Option[Term]], v : Int, args : Array[Term], i : Int
   }
 }
 
+///|
 /// Bind `v` to `t` in a fresh copy of the substitution (copy-on-write, so
 /// backtracking is just using the old substitution). Fails on occurs check.
-fn bind(subst : Array[Option[Term]], v : Int, t : Term) -> Option[Array[Option[Term]]] {
+fn bind(subst : Array[Term?], v : Int32, t : Term) -> Array[Term?]? {
   if occurs(subst, v, t) {
     None
   } else {
-    let s : Array[Option[Term]] = []
+    let s : Array[Term?] = []
     for x in subst {
       s.push(x)
     }
@@ -69,9 +78,10 @@ fn bind(subst : Array[Option[Term]], v : Int, t : Term) -> Option[Array[Option[T
   }
 }
 
+///|
 /// First-order unification with occurs check.
 /// Returns the extended substitution, or `None` on failure.
-pub fn unify(a : Term, b : Term, subst : Array[Option[Term]]) -> Option[Array[Option[Term]]] {
+pub fn unify(a : Term, b : Term, subst : Array[Term?]) -> Array[Term?]? {
   let a2 = deref(subst, a)
   let b2 = deref(subst, b)
   match (a2, b2) {
@@ -81,18 +91,23 @@ pub fn unify(a : Term, b : Term, subst : Array[Option[Term]]) -> Option[Array[Op
     (Atom(s1), Atom(s2)) => if s1 == s2 { Some(subst) } else { None }
     (Num(n1), Num(n2)) => if n1 == n2 { Some(subst) } else { None }
     (Str(s1), Str(s2)) => if s1 == s2 { Some(subst) } else { None }
-    (Compound(f1, a1), Compound(f2, a2)) => {
+    (Compound(f1, a1), Compound(f2, a2)) =>
       if f1 == f2 && a1.length() == a2.length() {
         unify_args(a1, a2, subst, 0)
       } else {
         None
       }
-    }
     _ => None
   }
 }
 
-fn unify_args(a1 : Array[Term], a2 : Array[Term], subst : Array[Option[Term]], i : Int) -> Option[Array[Option[Term]]] {
+///|
+fn unify_args(
+  a1 : Array[Term],
+  a2 : Array[Term],
+  subst : Array[Term?],
+  i : Int32,
+) -> Array[Term?]? {
   if i >= a1.length() {
     Some(subst)
   } else {
@@ -103,10 +118,11 @@ fn unify_args(a1 : Array[Term], a2 : Array[Term], subst : Array[Option[Term]], i
   }
 }
 
+///|
 /// Structural equality for `==/2`: variables compare positionally
 /// (an unbound variable equals any other unbound variable), so this is
 /// variant equality rather than ISO identity comparison.
-pub fn term_equal(subst : Array[Option[Term]], a : Term, b : Term) -> Bool {
+pub fn term_equal(subst : Array[Term?], a : Term, b : Term) -> Bool {
   let a2 = deref(subst, a)
   let b2 = deref(subst, b)
   match (a2, b2) {
@@ -114,14 +130,19 @@ pub fn term_equal(subst : Array[Option[Term]], a : Term, b : Term) -> Bool {
     (Atom(s1), Atom(s2)) => s1 == s2
     (Num(n1), Num(n2)) => n1 == n2
     (Str(s1), Str(s2)) => s1 == s2
-    (Compound(f1, a1), Compound(f2, a2)) => {
+    (Compound(f1, a1), Compound(f2, a2)) =>
       f1 == f2 && a1.length() == a2.length() && args_equal(subst, a1, a2, 0)
-    }
     _ => false
   }
 }
 
-fn args_equal(subst : Array[Option[Term]], a1 : Array[Term], a2 : Array[Term], i : Int) -> Bool {
+///|
+fn args_equal(
+  subst : Array[Term?],
+  a1 : Array[Term],
+  a2 : Array[Term],
+  i : Int32,
+) -> Bool {
   if i >= a1.length() {
     true
   } else if term_equal(subst, a1[i], a2[i]) {
@@ -131,12 +152,13 @@ fn args_equal(subst : Array[Option[Term]], a1 : Array[Term], a2 : Array[Term], i
   }
 }
 
+///|
 /// Evaluate an arithmetic expression to an integer (for `is/2`, `=:=/2`,
 /// comparisons, `between/3`).
-pub fn eval(subst : Array[Option[Term]], t : Term) -> Option[Int] {
+pub fn eval(subst : Array[Term?], t : Term) -> Int32? {
   match deref(subst, t) {
     Num(n) => Some(n)
-    Compound(f, args) => {
+    Compound(f, args) =>
       if args.length() == 1 && f == "-" {
         match eval(subst, args[0]) {
           Some(n) => Some(-n)
@@ -144,7 +166,7 @@ pub fn eval(subst : Array[Option[Term]], t : Term) -> Option[Int] {
         }
       } else if args.length() == 2 {
         match eval2(subst, args[0], args[1]) {
-          Some((x, y)) => {
+          Some((x, y)) =>
             if f == "+" {
               Some(x + y)
             } else if f == "-" {
@@ -152,97 +174,152 @@ pub fn eval(subst : Array[Option[Term]], t : Term) -> Option[Int] {
             } else if f == "*" {
               Some(x * y)
             } else if f == "/" || f == "//" || f == "div" {
-              if y == 0 { None } else { Some(x / y) }
+              if y == 0 {
+                None
+              } else {
+                Some(x / y)
+              }
             } else if f == "mod" {
-              if y == 0 { None } else { Some(x % y) }
+              if y == 0 {
+                None
+              } else {
+                Some(x % y)
+              }
             } else {
               None
             }
-          }
           _ => None
         }
       } else {
         None
       }
-    }
     _ => None
   }
 }
 
+///|
 /// Evaluate two arithmetic expressions together (for comparisons).
-pub fn eval2(subst : Array[Option[Term]], a : Term, b : Term) -> Option[(Int, Int)] {
+pub fn eval2(subst : Array[Term?], a : Term, b : Term) -> (Int32, Int32)? {
   match (eval(subst, a), eval(subst, b)) {
     (Some(x), Some(y)) => Some((x, y))
     _ => None
   }
 }
 
+///|
 /// Pretty-print a term for answers (`writeq` style: strings quoted).
-pub fn pretty(subst : Array[Option[Term]], t : Term) -> String {
+pub fn pretty(subst : Array[Term?], t : Term) -> String {
   pretty_q(subst, t, true)
 }
 
+///|
 /// Print a term for `write/1` (strings unquoted).
-pub fn write_term(subst : Array[Option[Term]], t : Term) -> String {
+pub fn write_term(subst : Array[Term?], t : Term) -> String {
   pretty_q(subst, t, false)
 }
 
-fn pretty_q(subst : Array[Option[Term]], t : Term, quoted : Bool) -> String {
+///|
+fn pretty_q(subst : Array[Term?], t : Term, quoted : Bool) -> String {
   match deref(subst, t) {
     Var(v) => "_G" + v.to_string()
     Atom(a) => a
     Num(n) => n.to_string()
     Str(s) => if quoted { "\"" + escape(s) + "\"" } else { s }
-    Compound(f, args) => {
+    Compound(f, args) =>
       if f == "." && args.length() == 2 {
         list_pretty(subst, args[0], args[1], quoted)
       } else if f == ":-" && args.length() == 2 {
-        pretty_q(subst, args[0], quoted) + " :- " + pretty_q(subst, args[1], quoted)
+        pretty_q(subst, args[0], quoted) +
+        " :- " +
+        pretty_q(subst, args[1], quoted)
       } else if f == "\\+" && args.length() == 1 {
         "\\+ " + pretty_q(subst, args[0], quoted)
       } else if f == "-" && args.length() == 1 {
         "-" + pretty_q(subst, args[0], quoted)
       } else if args.length() == 2 && is_infix(f) {
-        pretty_q(subst, args[0], quoted) + " " + f + " " + pretty_q(subst, args[1], quoted)
+        pretty_q(subst, args[0], quoted) +
+        " " +
+        f +
+        " " +
+        pretty_q(subst, args[1], quoted)
       } else {
         f + "(" + join_args(subst, args, quoted, 0) + ")"
       }
-    }
   }
 }
 
+///|
 fn is_infix(f : String) -> Bool {
-  f == "=" || f == "\\=" || f == "==" || f == "\\==" || f == "=:=" || f == "=\\=" ||
-    f == "is" || f == "<" || f == ">" || f == "=<" || f == ">=" || f == "+" || f == "-" ||
-    f == "*" || f == "/" || f == "//" || f == "mod" || f == "," || f == ";"
+  f == "=" ||
+  f == "\\=" ||
+  f == "==" ||
+  f == "\\==" ||
+  f == "=:=" ||
+  f == "=\\=" ||
+  f == "is" ||
+  f == "<" ||
+  f == ">" ||
+  f == "=<" ||
+  f == ">=" ||
+  f == "+" ||
+  f == "-" ||
+  f == "*" ||
+  f == "/" ||
+  f == "//" ||
+  f == "mod" ||
+  f == "," ||
+  f == ";"
 }
 
-fn join_args(subst : Array[Option[Term]], args : Array[Term], quoted : Bool, i : Int) -> String {
+///|
+fn join_args(
+  subst : Array[Term?],
+  args : Array[Term],
+  quoted : Bool,
+  i : Int32,
+) -> String {
   if i >= args.length() {
     ""
   } else if i == args.length() - 1 {
     pretty_q(subst, args[i], quoted)
   } else {
-    pretty_q(subst, args[i], quoted) + ", " + join_args(subst, args, quoted, i + 1)
+    pretty_q(subst, args[i], quoted) +
+    ", " +
+    join_args(subst, args, quoted, i + 1)
   }
 }
 
-fn list_pretty(subst : Array[Option[Term]], h : Term, t : Term, quoted : Bool) -> String {
+///|
+fn list_pretty(
+  subst : Array[Term?],
+  h : Term,
+  t : Term,
+  quoted : Bool,
+) -> String {
   match deref(subst, t) {
     Atom("[]") => "[" + pretty_q(subst, h, quoted) + "]"
-    Compound(".", args) => "[" + pretty_q(subst, h, quoted) + ", " + list_rest(subst, args, quoted)
-    _ => "[" + pretty_q(subst, h, quoted) + "|" + pretty_q(subst, t, quoted) + "]"
+    Compound(".", args) =>
+      "[" + pretty_q(subst, h, quoted) + ", " + list_rest(subst, args, quoted)
+    _ =>
+      "[" + pretty_q(subst, h, quoted) + "|" + pretty_q(subst, t, quoted) + "]"
   }
 }
 
-fn list_rest(subst : Array[Option[Term]], args : Array[Term], quoted : Bool) -> String {
+///|
+fn list_rest(subst : Array[Term?], args : Array[Term], quoted : Bool) -> String {
   match deref(subst, args[1]) {
     Atom("[]") => pretty_q(subst, args[0], quoted) + "]"
-    Compound(".", args2) => pretty_q(subst, args[0], quoted) + ", " + list_rest(subst, args2, quoted)
-    _ => pretty_q(subst, args[0], quoted) + "|" + pretty_q(subst, args[1], quoted) + "]"
+    Compound(".", args2) =>
+      pretty_q(subst, args[0], quoted) + ", " + list_rest(subst, args2, quoted)
+    _ =>
+      pretty_q(subst, args[0], quoted) +
+      "|" +
+      pretty_q(subst, args[1], quoted) +
+      "]"
   }
 }
 
+///|
 fn escape(s : String) -> String {
   let mut out = ""
   let mut i = 0
@@ -257,7 +334,7 @@ fn escape(s : String) -> String {
     } else if c == 9 {
       out = out + "\\t"
     } else {
-      out = out + Int::unsafe_to_char(c).to_string()
+      out = out + Int32::unsafe_to_char(c).to_string()
     }
     i = i + 1
     continue
