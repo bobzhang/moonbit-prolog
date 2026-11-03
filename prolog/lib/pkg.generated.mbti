@@ -1,0 +1,68 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "bobzhang/prolog/lib"
+
+// Values
+pub fn deref(Array[Term?], Term) -> Term
+
+pub fn eval(Array[Term?], Term) -> Int32?
+
+pub fn eval2(Array[Term?], Term, Term) -> (Int32, Int32)?
+
+pub fn parse_statement(Ctx, String) -> Statement?
+
+pub fn pretty(Array[Term?], Term) -> String
+
+pub fn strip_comments(String) -> String
+
+pub fn term_equal(Array[Term?], Term, Term) -> Bool
+
+pub fn trim(String) -> String
+
+pub fn unify(Term, Term, Array[Term?]) -> Array[Term?]?
+
+pub fn write_term(Array[Term?], Term) -> String
+
+// Errors
+
+// Types and methods
+pub struct Clause {
+  head : Term
+  body : Array[Term]
+}
+
+pub struct Ctx {
+  clauses : Array[Clause]
+  choice_stack : Array[Array[Bool]]
+  mut next_var : Int32
+  stop : Array[Bool]
+  mut output : String
+  mut halting : Bool
+}
+pub fn Ctx::new() -> Self
+pub fn Ctx::query(Self, Array[Term], Array[(String, Int32)], (Array[Term?], Array[(String, Int32)]) -> Bool) -> (Int32, Bool)
+pub fn Ctx::submit(Self, String, (Array[Term?], Array[(String, Int32)]) -> Bool) -> Submit
+pub fn Ctx::take_output(Self) -> String
+
+pub enum Statement {
+  StClause(Clause)
+  StQuery(Array[Term], Array[(String, Int32)])
+}
+
+pub enum Submit {
+  SyntaxError
+  Fact
+  Halt
+  Query(Int32, Bool)
+}
+
+pub(all) enum Term {
+  Var(Int32)
+  Atom(String)
+  Num(Int32)
+  Str(String)
+  Compound(String, Array[Term])
+}
+
+// Type aliases
+
+// Traits
