@@ -15,5 +15,5 @@ preferred_target = "wasm"
 description = "A small but real Prolog interpreter written in MoonBit: unification, backtracking, cut, findall, and a REPL."
 
 import {
-  "moonbitlang/async@0.20.5",
+  "moonbitlang/async@0.22.9",
 }
