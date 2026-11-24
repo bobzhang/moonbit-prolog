@@ -2,7 +2,6 @@
 /// runs. The reusable engine lives in the `lib` package.
 import {
   "bobzhang/prolog/lib",
-  "moonbitlang/async",
   "moonbitlang/async/stdio",
 }
 
