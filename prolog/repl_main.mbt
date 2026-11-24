@@ -28,7 +28,7 @@ fn flush_output(ctx : @lib.Ctx) -> Unit {
 }
 
 ///|
-async fn main {
+async fn main_async() -> Unit {
   let ctx = @lib.Ctx::new()
   let mut buf = ""
   while true {
@@ -79,4 +79,9 @@ async fn main {
     continue
   }
   ()
+}
+
+///|
+fn main {
+  @async.run_async_main(main_async)
 }
